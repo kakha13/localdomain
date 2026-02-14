@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="app-icon.png" alt="LocalDomain" width="128" />
+  <img src="logo/logo.png" alt="LocalDomain" width="128" />
 </p>
 
 <h1 align="center">LocalDomain</h1>
