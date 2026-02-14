@@ -17,9 +17,6 @@ src-tauri/gen
 .vscode
 .idea
 
-# Generated icon source
-app-icon.png
-
 # Built daemon binary (architecture-specific, built by scripts/build-linux-deb.sh)
 resources/localdomain-daemon
 
