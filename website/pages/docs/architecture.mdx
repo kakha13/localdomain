@@ -1,0 +1,102 @@
+# Architecture
+
+How LocalDomain works under the hood.
+
+## Overview
+
+```
+React UI ──tauri invoke()──▶ Tauri App ──JSON-RPC 2.0──▶ Daemon (privileged)
+                              │                               │
+                           SQLite DB                    hosts file
+                           (owns state)                 Caddy proxy
+                                                        TLS certs (rcgen)
+```
+
+The app has two processes:
+
+1. **Tauri App** — the desktop window you interact with. Runs as your normal user. Owns the SQLite database and all application state.
+2. **Daemon** — a privileged background service. Manages the hosts file, Caddy reverse proxy, and TLS certificates. Has no state of its own.
+
+They communicate over IPC using JSON-RPC 2.0:
+- **macOS/Linux:** Unix socket at `/var/run/localdomain.sock`
+- **Windows:** Named pipe at `\\.\pipe\localdomain`
+
+## Key Design: Stateless Daemon
+
+The daemon has **no database and no persistent state**. The app owns all state in SQLite and sends the complete configuration to the daemon on every sync.
+
+This means:
+- Only one source of truth (the app's database)
+- The daemon can be restarted without losing anything
+- Upgrades are simpler — just replace the daemon binary
+
+## Three Rust Crates
+
+The project is a Cargo workspace with three crates:
+
+### `src-tauri` — App Process
+- Tauri v2 desktop app
+- SQLite database (domains, audit log, settings)
+- Frontend API via Tauri commands (`src-tauri/src/commands/`)
+- Daemon communication via `DaemonClient`
+
+### `daemon` — Background Service
+- Runs as root/admin
+- Manages `/etc/hosts` entries
+- Generates Caddyfile and controls the Caddy process
+- Generates TLS certificates using `rcgen` (pure Rust, no OpenSSL)
+- IPC server (Unix socket or Named pipe)
+
+### `shared` — Common Types
+- Protocol structs shared between app and daemon
+- Domain validation logic
+- JSON-RPC message types
+
+## Tech Stack
+
+| Component | Technology | Why |
+|-----------|-----------|-----|
+| Desktop framework | Tauri v2 | Native, lightweight (~5MB), cross-platform |
+| Frontend | React 19 + TypeScript | Fast development, good ecosystem |
+| Backend | Rust | Performance, safety, cross-platform |
+| Reverse proxy | Caddy | Automatic HTTPS, simple config, reliable |
+| TLS certificates | rcgen | Pure Rust CA and cert generation, no OpenSSL |
+| Database | SQLite | Simple, embedded, zero setup |
+| IPC | JSON-RPC 2.0 | Simple, structured, easy to debug |
+
+## Platform Differences
+
+| Concern | macOS | Windows | Linux |
+|---------|-------|---------|-------|
+| Daemon | launchd | Windows Service | systemd |
+| IPC | Unix socket | Named pipe | Unix socket |
+| CA trust | `security add-trusted-cert` | `certutil -addstore Root` | `update-ca-certificates` |
+| Elevation | `osascript` | PowerShell RunAs | `pkexec` |
+| Hosts file | `/etc/hosts` | `C:\Windows\System32\drivers\etc\hosts` | `/etc/hosts` |
+
+Platform-specific code uses Rust's conditional compilation:
+
+```rust
+#[cfg(target_os = "macos")]     // macOS only
+#[cfg(target_os = "linux")]     // Linux only
+#[cfg(target_os = "windows")]   // Windows only
+#[cfg(unix)]                    // macOS + Linux
+```
+
+## Data Flow
+
+When you add a domain:
+
+1. **Frontend** calls `invoke("create_domain", { ... })`
+2. **Tauri command** validates input, inserts into SQLite, writes audit log
+3. **`sync_state_to_daemon()`** sends the full domain list to the daemon
+4. **Daemon** updates the hosts file, regenerates Caddyfile, generates TLS cert if needed, reloads Caddy
+
+Every mutation follows this pattern — the app always sends the **complete** configuration, not incremental updates.
+
+## Frontend Architecture
+
+- Views are swapped via a `View` union type (`"domains" | "xampp" | "settings" | "audit" | "inspect" | "about"`) — no router
+- State lives in custom hooks: `useDomains`, `useServiceStatus`, `useAccessLog`, `useAuditLog`, `useTheme`
+- API calls go through `src/lib/api.ts` via Tauri's `invoke()`
+- Both `useDomains` and `useServiceStatus` listen for `"state-changed"` events from the system tray to stay in sync

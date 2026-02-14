@@ -1,0 +1,25 @@
+[package]
+name = "localdomain-app"
+version = "0.1.2"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+localdomain-shared = { path = "../shared" }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+thiserror = "1"
+dirs = "5"
+
+[lib]
+name = "localdomain_app"
+crate-type = ["staticlib", "cdylib", "rlib"]

@@ -1,0 +1,86 @@
+# Building from Source
+
+How to build LocalDomain for production on each platform.
+
+## Build the Daemon
+
+The daemon must be built separately. It runs as a privileged system service.
+
+```bash
+cargo build -p localdomain-daemon --release
+```
+
+## Build the App
+
+### macOS (signed DMG)
+
+```bash
+APPLE_ID="your@email.com" \
+APPLE_PASSWORD="app-specific-password" \
+APPLE_TEAM_ID="YOUR_TEAM_ID" \
+npx tauri build --bundles dmg
+```
+
+Output: `target/release/bundle/dmg/LocalDomain_x.x.x_aarch64.dmg`
+
+### Windows (MSI + NSIS)
+
+```powershell
+npx tauri build
+```
+
+Output: `target/release/bundle/msi/` and `target/release/bundle/nsis/`
+
+### Linux (DEB)
+
+```bash
+npx tauri build --bundles deb
+```
+
+Output: `target/release/bundle/deb/`
+
+## Install the Daemon
+
+After building, the daemon needs to be installed as a system service.
+
+### macOS
+
+```bash
+sudo cp target/release/localdomain-daemon /usr/local/bin/localdomain-daemon
+./scripts/install-daemon.sh
+```
+
+### Windows (Administrator PowerShell)
+
+```powershell
+.\scripts\install-daemon.ps1
+```
+
+### Linux
+
+```bash
+sudo cp target/release/localdomain-daemon /usr/local/bin/localdomain-daemon
+sudo cp resources/localdomain-daemon.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now localdomain-daemon
+```
+
+## Download Caddy
+
+The daemon needs a Caddy binary. Use the provided scripts:
+
+| Platform | Script |
+|----------|--------|
+| macOS | `./scripts/download-caddy.sh` |
+| Windows | `.\scripts\download-caddy.ps1` |
+| Linux | `./scripts/download-caddy-linux.sh` |
+
+## File Locations
+
+| Resource | macOS / Linux | Windows |
+|----------|---------------|---------|
+| Data root | `/var/lib/localdomain/` | `C:\ProgramData\LocalDomain\` |
+| Certificates | `/var/lib/localdomain/certs/` | `C:\ProgramData\LocalDomain\certs\` |
+| Caddy config | `/var/lib/localdomain/caddy/` | `C:\ProgramData\LocalDomain\caddy\` |
+| Caddy binary | `/usr/local/bin/caddy` | `C:\ProgramData\LocalDomain\bin\caddy.exe` |
+| Daemon binary | `/usr/local/bin/localdomain-daemon` | `C:\ProgramData\LocalDomain\bin\localdomain-daemon.exe` |
+| Database | `~/.local/share/com.localdomain.app/localdomain.db` | `%APPDATA%\com.localdomain.app\localdomain.db` |

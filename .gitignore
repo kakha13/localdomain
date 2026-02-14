@@ -1,0 +1,30 @@
+# Rust
+/target
+**/*.rs.bk
+
+# Node
+node_modules
+dist
+
+# Tauri
+src-tauri/binaries/caddy
+src-tauri/gen
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode
+.idea
+
+# Generated icon source
+app-icon.png
+
+# Built daemon binary (architecture-specific, built by scripts/build-linux-deb.sh)
+resources/localdomain-daemon
+
+# Environment
+.env
+.env.local
+
+.private

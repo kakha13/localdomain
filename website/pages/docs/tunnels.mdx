@@ -1,0 +1,117 @@
+# Tunnels
+
+Share your local dev server with anyone on the internet. LocalDomain supports three tunnel types — pick the one that fits your use case.
+
+## Quick Tunnel
+
+The fastest way to share. Creates a free public URL via Cloudflare's Quick Tunnel service — no account needed.
+
+**How to use:**
+1. Click the **Share** button on any domain row
+2. Select the **Quick Tunnel** tab
+3. Click **Start Sharing**
+
+You'll get a random URL like `https://abc-xyz.trycloudflare.com` that anyone can use to access your local server.
+
+**Good to know:**
+- No Cloudflare account required
+- The URL is random and changes every time you restart the tunnel
+- Works immediately — no setup or configuration
+- Uses Cloudflare's free `trycloudflare.com` service under the hood
+- Great for quick demos, webhook testing, or showing work to a colleague
+
+## Named Tunnel
+
+A persistent public URL on your own domain. Requires a Cloudflare account with a domain.
+
+Named Tunnels have two modes: **Automatic** and **Manual**.
+
+### Automatic Mode
+
+LocalDomain handles the full setup — creates the tunnel, configures DNS, and starts routing traffic.
+
+**How to use:**
+1. Click the **Share** button on a domain row
+2. Select the **Named Tunnel** tab
+3. Click **Sign in to Cloudflare** — this opens your browser for Cloudflare OAuth
+4. After signing in, enter your **subdomain** and **Cloudflare domain** (e.g., `app` + `yourdomain.com`)
+5. You'll see a preview: "Your site will be at `https://app.yourdomain.com`"
+6. Click **Configure & Start**
+
+LocalDomain will automatically:
+- Create a Cloudflare tunnel
+- Configure DNS to route `app.yourdomain.com` to your tunnel
+- Start the tunnel connection
+
+### Manual Mode
+
+If you prefer to manage tunnels yourself in the Cloudflare dashboard.
+
+**Setup steps:**
+1. Go to [Cloudflare Zero Trust](https://one.dash.cloudflare.com/) → Networks → Tunnels
+2. Create a tunnel (or use an existing one) and copy the **tunnel token**
+3. In the Public Hostname tab, add a hostname:
+   - Subdomain: `app` (your choice)
+   - Domain: `yourdomain.com`
+   - Type: HTTP
+   - URL: `localhost:3000` (your local port)
+4. Back in LocalDomain, select **Manual** mode
+5. Enter your **subdomain**, **domain**, and **tunnel token**
+6. Click **Start Sharing**
+
+**When to use Named Tunnels:**
+- You need a stable, predictable URL (e.g., for OAuth callbacks)
+- You want to share on your own domain
+- You need persistent tunnel configuration that survives restarts
+
+## SSH Tunnel
+
+Route traffic through your own VPS using SSH reverse port forwarding. No Cloudflare needed — just an SSH server.
+
+**How to use:**
+1. Click the **Share** button on a domain row
+2. Select the **SSH Tunnel** tab
+3. Fill in your VPS details:
+   - **Host** — your server hostname or IP (e.g., `vps.example.com`)
+   - **Port** — SSH port (default: `22`)
+   - **User** — SSH username (e.g., `root`)
+   - **Remote Port** — the port on your VPS to expose (e.g., `8080`)
+   - **SSH Key Path** — path to your private key (optional, e.g., `~/.ssh/id_rsa`)
+4. Click **Start Sharing**
+
+Your local server will be accessible at `http://vps.example.com:8080`.
+
+**How it works under the hood:**
+
+LocalDomain runs an SSH reverse tunnel (`ssh -N -R`) that forwards traffic from your VPS port to your local machine. This is the same as running:
+
+```bash
+ssh -N -R 8080:localhost:3000 user@vps.example.com
+```
+
+**When to use SSH Tunnels:**
+- You already have a VPS or cloud server
+- You don't want to depend on Cloudflare
+- You need full control over the infrastructure
+- You want to use a custom port on your server
+
+## Default SSH Settings
+
+If you frequently use SSH tunnels, you can set default values in **Settings → Tunnels**:
+
+- **Default SSH Host** — pre-fills the host field
+- **Default SSH User** — pre-fills the user field
+- **Default SSH Key Path** — pre-fills the key path
+
+This saves you from entering the same VPS details every time.
+
+## Stopping Tunnels
+
+To stop a running tunnel, click the **Stop Sharing** button on the domain row. The tunnel process is killed and the public URL stops working immediately.
+
+## Cloudflared Binary
+
+LocalDomain automatically downloads the `cloudflared` binary when you first use a Quick or Named tunnel. No manual installation needed. The binary is stored at:
+
+- **macOS/Linux:** `/usr/local/bin/cloudflared`
+- **Windows:** `C:\ProgramData\LocalDomain\bin\cloudflared.exe`

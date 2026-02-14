@@ -1,0 +1,117 @@
+# Contributing
+
+LocalDomain is open source and we welcome contributions. Here's how to get started.
+
+## Prerequisites
+
+- **Rust** — install via [rustup](https://rustup.rs/)
+- **Node.js 18+** — for the React frontend
+- **Tauri CLI** — `cargo install tauri-cli`
+
+### Platform-specific
+
+**macOS:**
+- Xcode Command Line Tools (`xcode-select --install`)
+
+**Windows:**
+- Visual Studio Build Tools 2022 (C++ workload)
+- WebView2 runtime
+
+**Linux:**
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev \
+  libayatana-appindicator3-dev librsvg2-dev patchelf \
+  libssl-dev build-essential pkg-config
+```
+
+## Setup
+
+```bash
+# Clone the repo
+git clone https://github.com/kakha13/localdomain.git
+cd localdomain
+
+# Install frontend dependencies
+npm install
+
+# Check everything compiles
+cargo check --workspace
+npx tsc --noEmit
+
+# Run tests
+cargo test --workspace
+```
+
+## Development
+
+```bash
+# Start the app with hot-reload
+cargo tauri dev
+```
+
+This launches the Tauri app with Vite hot-reload on port 1420. The frontend rebuilds instantly on changes. **Note:** `cargo tauri dev` does NOT rebuild the daemon — see below.
+
+### Rebuilding the daemon
+
+After changing daemon code, you need to rebuild and restart it:
+
+**macOS:**
+```bash
+./scripts/reload-daemon.sh
+```
+
+**Linux:**
+```bash
+./scripts/reload-daemon-linux.sh
+```
+
+**Windows:**
+```powershell
+.\scripts\reload-daemon.ps1
+```
+
+## Project Structure
+
+```
+localdomain/
+├── src/                  # React frontend (TypeScript)
+│   ├── components/       # UI components
+│   ├── hooks/            # Custom React hooks
+│   └── lib/              # API calls, utilities
+├── src-tauri/            # Tauri app (Rust)
+│   ├── src/commands/     # Tauri commands (invoked from frontend)
+│   ├── src/db/           # SQLite database
+│   └── src/daemon_client/# IPC client to daemon
+├── daemon/               # Background daemon (Rust)
+│   └── src/              # Hosts file, Caddy, certs, IPC server
+├── shared/               # Shared types between app and daemon
+├── scripts/              # Build and deployment scripts
+└── resources/            # Bundled resources (service files, etc.)
+```
+
+## How to Contribute
+
+1. **Pick an issue** or open one describing what you want to work on
+2. **Fork and branch** — create a feature branch from `main`
+3. **Make your changes** — follow existing code patterns
+4. **Test** — run `cargo test --workspace` and `npx tsc --noEmit`
+5. **Submit a PR** — describe what you changed and why
+
+### Good first contributions
+
+- Bug fixes
+- Documentation improvements
+- UI/UX enhancements
+- Test coverage
+- Platform-specific fixes (especially Linux and Windows)
+
+## Code Conventions
+
+- **Rust:** Follow existing patterns. Use `#[cfg(target_os)]` for platform-specific code
+- **TypeScript:** React hooks for state, `invoke()` for Tauri commands
+- **Commits:** Short, descriptive messages. One logical change per commit
+- **No external services:** Everything runs locally. No telemetry, no accounts
+
+## Questions?
+
+Open an issue on [GitHub](https://github.com/kakha13/localdomain) or [email us](mailto:kakhagiorgashvili@gmail.com).

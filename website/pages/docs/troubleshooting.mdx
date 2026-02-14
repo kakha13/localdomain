@@ -1,0 +1,114 @@
+# Troubleshooting
+
+Common issues and how to fix them.
+
+## Domain not resolving
+
+**Symptom:** Browser shows "This site can't be reached" when visiting your domain.
+
+**Fix:**
+1. Check that the domain is **enabled** (toggle is on) in LocalDomain
+2. Check the status bar — both **Daemon** and **Caddy** should show "Running"
+3. Make sure your dev server is actually running on the target port
+4. Try restarting services from the system tray menu
+
+## HTTPS certificate warnings
+
+**Symptom:** Browser shows "Your connection is not private" or certificate errors.
+
+**Fix:**
+1. Check the status bar for **CA Trusted** — if it doesn't show, go to Settings and click "Install CA"
+2. On **Linux**, Firefox and Chrome use their own certificate stores. You may need to import the CA certificate manually into your browser
+3. Try regenerating the certificate: delete the domain and re-add it
+
+## Daemon not starting
+
+### macOS
+```bash
+# Check daemon status
+sudo launchctl list | grep localdomain
+
+# View daemon logs
+sudo log show --predicate 'process == "localdomain-daemon"' --last 5m
+
+# Restart daemon
+sudo launchctl kickstart -k system/com.localdomain.daemon
+```
+
+### Windows
+```powershell
+# Check service status
+sc query localdomain-daemon
+
+# View logs
+Get-EventLog -LogName Application -Source localdomain-daemon -Newest 20
+
+# Run daemon in foreground for debugging
+target\release\localdomain-daemon.exe --console
+```
+
+### Linux
+```bash
+# Check service status
+sudo systemctl status localdomain-daemon
+
+# View logs
+sudo journalctl -u localdomain-daemon -f
+
+# Restart daemon
+sudo systemctl restart localdomain-daemon
+```
+
+## Port conflict
+
+**Symptom:** Caddy fails to start or a domain doesn't work.
+
+**Fix:** Make sure nothing else is using port 80 or 443:
+
+```bash
+# macOS / Linux
+sudo lsof -i :80
+sudo lsof -i :443
+
+# Windows
+netstat -ano | findstr :80
+netstat -ano | findstr :443
+```
+
+If another process (like Apache, Nginx, or IIS) is using those ports, stop it or change its configuration.
+
+## XAMPP Apache not starting (port 80 conflict)
+
+**Symptom:** XAMPP Apache fails to start after enabling LocalDomain, or LocalDomain Caddy fails to start while Apache is running.
+
+**Why it happens:** both services are trying to bind to port `80`.
+
+- LocalDomain HTTP listener defaults to `80`
+- XAMPP Apache also often defaults to `Listen 80`
+
+Only one process can own port `80`, so one of them fails.
+
+**Recommended fix:**
+1. Change Apache `Listen` to another port (for example `8080`) in XAMPP config
+2. Restart Apache
+3. Re-scan or refresh XAMPP settings in LocalDomain (it auto-detects Apache port from config)
+
+After this, LocalDomain keeps serving your friendly domains on `80/443` and reverse proxies to Apache on the new port.
+
+For full details, see [XAMPP Service](/docs/xampp).
+
+## Windows SmartScreen warning
+
+The app is not code-signed for Windows. On first launch you'll see a SmartScreen warning. Click **More info** then **Run anyway**.
+
+## Linux CA trust limitations
+
+`update-ca-certificates` covers system tools (curl, wget) but **not** Firefox or Chrome. These browsers use their own certificate stores (NSS). You may need to manually import the CA certificate:
+
+1. Find the CA cert at `/var/lib/localdomain/certs/ca.pem`
+2. In Firefox: Settings → Privacy & Security → Certificates → Import
+3. In Chrome: Settings → Privacy and Security → Security → Manage certificates → Import
+
+## Still stuck?
+
+[Contact us](mailto:kakhagiorgashvili@gmail.com) and we'll help you out.

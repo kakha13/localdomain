@@ -1,0 +1,18 @@
+{
+  "index": "Getting Started",
+  "features": "Features",
+  "xampp": "XAMPP Service",
+  "tunnels": "Tunnels",
+  "troubleshooting": "Troubleshooting",
+  "-- Using the App": {
+    "type": "separator",
+    "title": "Using the App"
+  },
+  "--- Contributing": {
+    "type": "separator",
+    "title": "Open Source"
+  },
+  "contributing": "Contributing",
+  "architecture": "Architecture",
+  "building": "Building from Source"
+}

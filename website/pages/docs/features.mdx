@@ -1,0 +1,172 @@
+# Features
+
+A detailed guide to everything LocalDomain can do.
+
+## Custom Local Domains
+
+Create any domain you want and point it to a local port:
+
+| Domain | Target | What it does |
+|--------|--------|-------------|
+| `myapp.local` | `127.0.0.1:3000` | Your React/Vue/Next.js frontend |
+| `api.myapp.local` | `127.0.0.1:8080` | Your API server |
+| `admin.local` | `127.0.0.1:4200` | An admin dashboard |
+
+Domains are added to your system hosts file automatically. No need to edit `/etc/hosts` or `C:\Windows\System32\drivers\etc\hosts` by hand.
+
+## Trusted HTTPS
+
+LocalDomain creates a **local Certificate Authority (CA)** on your machine and installs it in your OS trust store. Every domain you create with HTTPS gets a real certificate signed by this CA.
+
+**What this means:**
+- Chrome, Safari, Firefox, and Edge show a green lock
+- No "Your connection is not private" warnings
+- No need to click through security exceptions
+- Works exactly like a production HTTPS site
+
+**Use cases for HTTPS:**
+- OAuth callback URLs that require HTTPS
+- Testing cookie `Secure` and `SameSite` attributes
+- Service workers (require HTTPS)
+- Mixed content issues between HTTP and HTTPS
+
+## Reverse Proxy
+
+Each domain is routed through a reverse proxy powered by [Caddy](https://caddyserver.com). When you visit `myapp.local`, the proxy forwards the request to `127.0.0.1:3000` (or whatever port you set).
+
+This means:
+- Your dev server doesn't need to listen on port 80 or 443
+- Multiple domains can run simultaneously on different ports
+- HTTPS termination happens at the proxy — your dev server stays plain HTTP
+
+## XAMPP Service Integration
+
+LocalDomain integrates directly with XAMPP Apache so you can manage PHP projects and VirtualHosts without editing Apache files by hand.
+
+What you can do:
+- Set and auto-detect your XAMPP install path
+- Start/stop Apache from the app
+- Scan existing `httpd-vhosts.conf` entries and import them
+- Create XAMPP-type domains with a document root
+- Keep friendly local domains while Apache runs on a non-80 port (recommended)
+
+Important: if XAMPP Apache and LocalDomain both try to use port `80`, one service will fail to start. Keep LocalDomain on `80/443` and change Apache to another port (for example `8080`) so LocalDomain can proxy traffic correctly.
+
+Full setup and internals: [XAMPP Service](/docs/xampp)
+
+## Wildcard Domains
+
+Enable the wildcard toggle on a domain to make all subdomains resolve automatically:
+
+```
+*.myapp.local → 127.0.0.1:3000
+```
+
+This is useful for:
+- **Multi-tenant apps** — `tenant1.myapp.local`, `tenant2.myapp.local` all hit the same server
+- **Dynamic subdomains** — your app reads the subdomain from the `Host` header
+- **Microservices** — route different subdomains to the same entry point
+
+## Public Tunnels
+
+Share any local domain with the internet. LocalDomain supports three tunnel types:
+
+- **Quick Tunnel** — free random URL via Cloudflare, no account needed
+- **Named Tunnel** — persistent URL on your own domain via Cloudflare
+- **SSH Tunnel** — reverse port forwarding through your own VPS
+
+Click the **Share** button on any domain row to open the tunnel dialog. See the [Tunnels](/docs/tunnels) page for full details on each type.
+
+## Request Inspector
+
+Click on any domain to open the Request Inspector — a detailed view of all HTTP traffic hitting that domain.
+
+**Table columns:**
+- **Time** — when the request was received
+- **Method** — GET, POST, PUT, DELETE, etc.
+- **Path** — the URL path that was requested
+- **Status** — color-coded HTTP status code (green for 2xx, yellow for 3xx, red for 4xx/5xx)
+- **Duration** — how long the request took (shown in µs, ms, or seconds)
+- **Size** — response body size (shown in B, KB, or MB)
+
+**Detail panel:** Click any row to see the full request details:
+- **General** — method, URI, status, duration, size, remote IP, protocol (e.g., HTTP/1.1), timestamp
+- **Query Parameters** — parsed key-value pairs from the URL query string
+- **Request Headers** — all headers sent by the client
+- **Response Headers** — all headers returned by your server
+
+Think of it like the Network tab in browser DevTools, but for all your local domains.
+
+### Access Log Toggle
+
+Each domain has an access log toggle in the Request Inspector toolbar. When disabled, no requests are captured for that domain. Enable it to start logging — useful for debugging or monitoring specific domains without noise from others.
+
+## Audit Log
+
+Every change you make is recorded:
+
+- Domain created, modified, or deleted
+- Services started or stopped
+- Access logging enabled or disabled
+- Timestamp for each action
+
+This gives you a complete history of what happened and when.
+
+## Settings
+
+Access settings from the sidebar. Here's what you can configure:
+
+### General
+- **Start on boot** — launch the daemon automatically when your computer starts
+- **HTTP Port** — the port Caddy listens on for HTTP traffic (default: `80`)
+- **HTTPS Port** — the port Caddy listens on for HTTPS traffic (default: `443`)
+
+### Service Control
+- Start or stop the reverse proxy from the settings page
+- View the current status of the proxy server
+
+### Certificate Authority
+- See whether your local CA is generated and trusted
+- **Trust Certificate** button — installs the CA in your OS trust store if it's not already trusted
+- You may need to restart your browser after trusting the CA
+
+### Tunnel Defaults
+Pre-fill SSH tunnel settings so you don't have to enter them every time:
+- **Cloudflare Tunnel Token** — default token for Named Tunnels (manual mode)
+- **Default SSH Host** — your VPS hostname
+- **Default SSH User** — your SSH username
+- **Default SSH Key Path** — path to your private key
+
+### Danger Zone
+- **Uninstall** — removes the background service, stops all proxying, and cleans up hosts file entries. Requires confirmation.
+
+## Setup Wizard
+
+On first launch, LocalDomain walks you through a 3-step setup:
+
+1. **Install Background Service** — installs the daemon that manages your hosts file and proxy. Requires your admin/root password.
+2. **Start Reverse Proxy** — starts the Caddy proxy so domains can be routed.
+3. **Create Default Domain** — creates `domain.local` pointing to `127.0.0.1` so you can verify everything works.
+
+You can skip the wizard and set things up manually, but the wizard handles everything in under a minute.
+
+## Background Service
+
+The daemon runs as a system service:
+- **macOS** — launchd (`com.localdomain.daemon`)
+- **Windows** — Windows Service (`localdomain-daemon`)
+- **Linux** — systemd (`localdomain-daemon`)
+
+It starts automatically on boot (configurable in Settings) and runs with the minimal privileges needed to manage the hosts file and proxy.
+
+## System Tray
+
+LocalDomain lives in your system tray. You can:
+- Toggle domains on/off directly from the tray menu
+- Start/stop services
+- See daemon and proxy status at a glance
+- Close the main window — the app keeps running in the tray
+
+## Dark Mode
+
+LocalDomain follows your system theme automatically, or you can toggle between light and dark mode manually in the sidebar.

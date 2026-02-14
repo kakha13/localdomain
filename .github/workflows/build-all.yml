@@ -1,0 +1,304 @@
+name: Build LocalDomain
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - arch: aarch64
+            target: aarch64-apple-darwin
+          - arch: x86_64
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Extract version from git tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ $GITHUB_REF != refs/tags/* ]]; then
+            VERSION=0.0.0-1
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Update version in config files
+        run: |
+          node -e "
+            const fs = require('fs');
+            const version = '${{ steps.version.outputs.VERSION }}';
+            const files = ['src-tauri/tauri.conf.json', 'package.json'];
+            files.forEach(f => {
+              const data = JSON.parse(fs.readFileSync(f, 'utf8'));
+              data.version = version;
+              fs.writeFileSync(f, JSON.stringify(data, null, 2) + '\\n');
+            });
+          "
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './ -> target'
+          cache-targets: 'true'
+          cache-all-crates: 'true'
+       
+      - name: Cache Tauri CLI
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/
+          key: ${{ runner.os }}-tauri-cli-v2-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-tauri-cli-v2-
+
+      - name: Install Tauri CLI
+        run: |
+          if ! command -v cargo-tauri &> /dev/null; then
+            cargo install tauri-cli --locked
+          fi
+       
+      - name: Install dependencies
+        run: npm ci
+       
+      - name: Import Apple Certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          # Decode and import certificate
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          
+          # Create keychain
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          
+          # Import certificate
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/productsign
+          
+          # Allow codesign to use the key
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
+          
+          rm certificate.p12
+      
+      - name: Build daemon
+        run: cargo build -p localdomain-daemon --release --target ${{ matrix.target }}
+      
+      - name: Copy daemon to resources
+        run: |
+          mkdir -p resources
+          cp target/${{ matrix.target }}/release/localdomain-daemon resources/
+      
+      - name: Build app (macOS DMG)
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx tauri build --bundles dmg --target ${{ matrix.target }}
+      
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalDomain-macOS-${{ matrix.arch }}
+          path: target/${{ matrix.target }}/release/bundle/dmg/
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Extract version from git tag
+        id: version
+        shell: bash
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ $GITHUB_REF != refs/tags/* ]]; then
+            VERSION=0.0.0-1
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Update version in config files
+        run: |
+          node -e "
+            const fs = require('fs');
+            const version = '${{ steps.version.outputs.VERSION }}';
+            const files = ['src-tauri/tauri.conf.json', 'package.json'];
+            files.forEach(f => {
+              const data = JSON.parse(fs.readFileSync(f, 'utf8'));
+              data.version = version;
+              fs.writeFileSync(f, JSON.stringify(data, null, 2) + '\n');
+            });
+          "
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './ -> target'
+          cache-targets: 'true'
+          cache-all-crates: 'true'
+       
+      - name: Cache Tauri CLI
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/
+          key: ${{ runner.os }}-tauri-cli-v2-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-tauri-cli-v2-
+
+      - name: Install Tauri CLI
+        run: |
+          if ! command -v cargo-tauri &> /dev/null; then
+            cargo install tauri-cli --locked
+          fi
+       
+      - name: Install dependencies
+        run: npm ci
+   
+      - name: Build daemon
+        run: cargo build -p localdomain-daemon --release
+   
+      - name: Copy daemon to resources
+        run: |
+          md resources -Force
+          cp target\release\localdomain-daemon.exe resources\
+      
+      - name: Download Caddy
+        run: .\scripts\download-caddy.ps1
+      
+      - name: Build app (Windows MSI + NSIS)
+        run: npx tauri build
+      
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalDomain-Windows
+          path: target/release/bundle/
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Extract version from git tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ $GITHUB_REF != refs/tags/* ]]; then
+            VERSION=0.0.0-1
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Update version in config files
+        run: |
+          node -e "
+            const fs = require('fs');
+            const version = '${{ steps.version.outputs.VERSION }}';
+            const files = ['src-tauri/tauri.conf.json', 'package.json'];
+            files.forEach(f => {
+              const data = JSON.parse(fs.readFileSync(f, 'utf8'));
+              data.version = version;
+              fs.writeFileSync(f, JSON.stringify(data, null, 2) + '\\n');
+            });
+          "
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            build-essential \
+            pkg-config
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './ -> target'
+          cache-targets: 'true'
+          cache-all-crates: 'true'
+       
+      - name: Cache Tauri CLI
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/
+          key: ${{ runner.os }}-tauri-cli-v2-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-tauri-cli-v2-
+
+      - name: Install Tauri CLI
+        run: |
+          if ! command -v cargo-tauri &> /dev/null; then
+            cargo install tauri-cli --locked
+          fi
+       
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build daemon
+        run: cargo build -p localdomain-daemon --release
+      
+      - name: Build app (Linux DEB)
+        run: ./scripts/build-linux-deb.sh
+      
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalDomain-Linux
+          path: target/release/bundle/deb/
+
+  release:
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            LocalDomain-macOS-*/**
+            LocalDomain-Windows/**
+            LocalDomain-Linux/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

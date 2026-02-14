@@ -1,0 +1,80 @@
+# Getting Started
+
+LocalDomain lets you map custom domains like `myapp.local` to your local dev servers with trusted HTTPS — no terminal commands, no config files.
+
+## Download
+
+| Platform | Download |
+|----------|----------|
+| macOS (Apple Silicon) | [LocalDomain_0.1.2_aarch64.dmg](https://sourceforge.net/projects/localdomain/files/v0.1.2/LocalDomain_0.1.2_aarch64.dmg/download) |
+| Windows (x64) | [LocalDomain_0.1.2_x64_en-US.msi](https://sourceforge.net/projects/localdomain/files/v0.1.2/LocalDomain_0.1.2_x64_en-US.msi/download) |
+| Linux (amd64) | [LocalDomain_0.1.2_amd64.deb](https://sourceforge.net/projects/localdomain/files/v0.1.1/LocalDomain_0.1.1_amd64.deb/download) |
+
+## First Launch
+
+On first launch, LocalDomain shows a **Setup Wizard** that walks you through three steps:
+
+1. **Install Background Service** — click **Install** and enter your admin/root password. This installs a lightweight daemon that manages your hosts file, proxy, and certificates.
+2. **Start Reverse Proxy** — click **Start** to launch the Caddy proxy that routes your domains.
+3. **Create Default Domain** — automatically creates `domain.local` so you can verify everything works.
+
+The wizard takes under a minute. Once complete, the status bar at the bottom shows:
+- **Daemon: Running** — the background service is active
+- **Caddy: Running** — the reverse proxy is ready
+- **CA Trusted** — the local Certificate Authority is installed in your system
+
+## Add Your First Domain
+
+1. Click **+ Add Domain** in the top right
+2. Enter a domain name, e.g. `myapp.local`
+3. Set the target port your dev server runs on, e.g. `3000`
+4. Choose the protocol:
+   - **HTTP** — plain `http://myapp.local`
+   - **HTTPS** — trusted `https://myapp.local` with a green lock
+   - **Both** — both HTTP and HTTPS work
+5. Click **Save**
+
+That's it. Open `https://myapp.local` in your browser and it works — valid certificate, no warnings.
+
+## Using XAMPP?
+
+LocalDomain also supports XAMPP projects (Apache + VirtualHosts + document roots).
+
+- Set your XAMPP path in the **XAMPP** sidebar page
+- Start/stop Apache from LocalDomain
+- Scan and import existing `httpd-vhosts.conf` entries
+- Create domains in **XAMPP** mode with a document root
+
+Read the full guide: [XAMPP Service](/docs/xampp)
+
+## Managing Domains
+
+- **Toggle on/off** — click the switch next to any domain to enable or disable it without deleting
+- **Edit** — click the `···` menu on a domain row to modify its settings
+- **Delete** — remove a domain entirely from the same menu
+- **Search** — use the search bar to filter domains when you have many
+
+## System Tray
+
+LocalDomain lives in your system tray. You can:
+- Toggle domains on/off
+- Start/stop services
+- See daemon and proxy status
+- Close the main window — the app keeps running in the tray
+
+## Share with Anyone
+
+Want to show your local site to someone? Click the **Share** button on any domain row. You have three options:
+
+- **Quick Tunnel** — instant public URL, no account needed
+- **Named Tunnel** — persistent URL on your own Cloudflare domain
+- **SSH Tunnel** — route through your own VPS
+
+See the [Tunnels](/docs/tunnels) page for details on each type.
+
+## What's Next
+
+- Learn about all [Features](/docs/features) in detail
+- Set up [Tunnels](/docs/tunnels) to share your local server
+- Having issues? Check [Troubleshooting](/docs/troubleshooting)
+- Want to contribute? See [Contributing](/docs/contributing)

@@ -1,0 +1,130 @@
+# XAMPP Service
+
+Use LocalDomain with XAMPP Apache and VirtualHosts, without manually juggling hosts entries and SSL for local domains.
+
+This page covers both:
+- **User-level setup** (what to click)
+- **Under the hood** (what LocalDomain changes and why)
+
+## What XAMPP integration does
+
+When you create a domain in **XAMPP** mode, LocalDomain:
+
+1. Resolves your domain locally (`myapp.local` -> `127.0.0.1`)
+2. Serves domain traffic through LocalDomain's reverse proxy (Caddy)
+3. Forwards requests to XAMPP Apache on the port Apache is configured to use
+4. Keeps Apache VirtualHost config in sync for your XAMPP domains
+
+This lets you keep clean domain URLs while Apache can run on any free port.
+
+## Quick setup (in the app)
+
+1. Open the **XAMPP** page from the sidebar
+2. In **Configuration**, set **XAMPP Path** (or click **Auto-Detect**)
+3. In **Apache**, click **Start**
+4. Optional: in **VHost Scanner**, click **Scan VHosts** and import existing entries
+5. Go to **Domains** -> **+ Add Domain** -> choose **XAMPP**
+6. Enter domain name + document root, then save
+
+## Critical: port 80 conflict (most common issue)
+
+If XAMPP Apache is on default port `80` and LocalDomain is also using `80`, they conflict.
+
+- LocalDomain HTTP listener default: `80`
+- XAMPP Apache default: `Listen 80`
+
+Only one process can bind to port `80`, so XAMPP Apache or LocalDomain Caddy will fail to start.
+
+**Recommended fix:**
+- Change Apache `Listen` to another free port (for example `8080`, `8081`, `3000`, etc.)
+- Restart Apache
+- LocalDomain detects that Apache port and proxies to it automatically
+
+You can choose any free port for Apache. Using a non-80 Apache port is the normal setup with LocalDomain.
+
+## How traffic flows
+
+Example with Apache changed to `8080`:
+
+`https://shop.local` -> LocalDomain Caddy (`:443`) -> `127.0.0.1:8080` (XAMPP Apache) -> your document root
+
+Important detail:
+- HTTPS terminates at Caddy
+- Apache receives HTTP on its configured port
+
+This means you get trusted HTTPS in browser while Apache itself does not need to own port 443.
+
+## VHost Scanner and Import
+
+The scanner reads your XAMPP `httpd-vhosts.conf` and finds importable VirtualHost blocks.
+
+During scan/import, LocalDomain:
+- Ignores the LocalDomain-managed block
+- Skips `localhost`
+- Marks entries that already exist in LocalDomain as **Already exists**
+- Imports selected entries as XAMPP domains (`domain_type = xampp`)
+
+Imported domains are created with:
+- `protocol = http` initially
+- `document_root` from the VirtualHost
+- target port derived from current Apache config
+
+You can edit protocol/domain settings later from the normal domain editor.
+
+## What LocalDomain changes in Apache config
+
+LocalDomain manages only a fenced block in `httpd-vhosts.conf`:
+
+```text
+# BEGIN LOCALDOMAIN MANAGED VHOSTS
+...
+# END LOCALDOMAIN MANAGED VHOSTS
+```
+
+Behavior:
+- Keeps your own VirtualHost entries outside this block untouched
+- Rewrites only the managed block from current app state
+- Adds/keeps a localhost vhost in the managed block so localhost continues to work
+- Creates backup file before writing: `httpd-vhosts.conf.localdomain.bak`
+
+It also ensures `httpd.conf` has the vhost include enabled (`Include ... httpd-vhosts.conf`).
+
+## Safety behavior (rollback)
+
+When syncing XAMPP config, the daemon performs this order:
+
+1. Write new managed vhost block
+2. Run Apache config test (`httpd -t`)
+3. Restart Apache
+
+If config test or restart fails, LocalDomain rolls back from the backup file.
+
+## Domain toggles and persistence
+
+For XAMPP domains:
+- Turning a domain **off** stops routing in Caddy
+- Local hosts and Apache vhost entries are preserved while toggled off
+- Deleting the domain removes it from managed config on next sync
+
+This is why re-enabling a domain is quick and does not require rebuilding everything manually.
+
+## Platform paths
+
+| Platform | Default XAMPP path | Apache config | VHosts config |
+|----------|--------------------|---------------|---------------|
+| macOS | `/Applications/XAMPP/xamppfiles` | `/Applications/XAMPP/xamppfiles/etc/httpd.conf` | `/Applications/XAMPP/xamppfiles/etc/extra/httpd-vhosts.conf` |
+| Linux | `/opt/lampp` | `/opt/lampp/etc/httpd.conf` | `/opt/lampp/etc/extra/httpd-vhosts.conf` |
+| Windows | `C:\xampp` | `C:\xampp\apache\conf\httpd.conf` | `C:\xampp\apache\conf\extra\httpd-vhosts.conf` |
+
+## Troubleshooting checklist
+
+If something is not working:
+
+1. Confirm XAMPP path is correct in **XAMPP -> Configuration**
+2. Confirm Apache is running in **XAMPP -> Apache**
+3. Check for port conflict (`80`) and move Apache to any free port if needed
+4. Re-scan VHosts after changing Apache/XAMPP config
+5. Ensure domain is enabled in LocalDomain
+6. Ensure LocalDomain daemon + Caddy are running
+
+More fixes: [Troubleshooting](/docs/troubleshooting)
