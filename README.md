@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://getlocaldomain.com/"><strong>Website</strong></a> ·
   <a href="https://getlocaldomain.com/docs"><strong>Documentation</strong></a> ·
-  <a href="https://github.com/localdomain/localdomain/releases">Releases</a>
+  <a href="https://github.com/kakha13/localdomain/releases">Releases</a>
 </p>
 
 <p align="center">
@@ -15,11 +15,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/localdomain/localdomain/releases/latest">
-    <img src="https://img.shields.io/github/v/release/localdomain/localdomain?include_prereleases&style=flat&label=latest" alt="GitHub release" />
+  <a href="https://github.com/kakha13/localdomain/releases/latest">
+    <img src="https://img.shields.io/github/v/release/kakha13/localdomain?include_prereleases&style=flat&label=latest" alt="GitHub release" />
   </a>
-  <a href="https://github.com/localdomain/localdomain/actions/workflows/build-all.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/localdomain/localdomain/build-all.yml?branch=main" alt="Build status" />
+  <a href="https://github.com/kakha13/localdomain/actions/workflows/build-all.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/kakha13/localdomain/build-all.yml?branch=main" alt="Build status" />
   </a>
 </p>
 
