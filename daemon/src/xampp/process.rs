@@ -7,7 +7,7 @@ use super::detect;
 pub fn test_apache_config(xampp_path: &str) -> Result<()> {
     let httpd = detect::get_httpd_binary(xampp_path);
 
-    let output = std::process::Command::new(&httpd)
+    let output = localdomain_shared::silent_cmd(&httpd)
         .arg("-t")
         .output()
         .context("Failed to run httpd -t")?;
@@ -73,7 +73,7 @@ fn restart_apache_platform(xampp_path: &str) -> Result<()> {
 #[cfg(target_os = "windows")]
 fn restart_apache_platform(xampp_path: &str) -> Result<()> {
     let httpd = format!("{}\\apache\\bin\\httpd.exe", xampp_path);
-    let output = std::process::Command::new(&httpd)
+    let output = localdomain_shared::silent_cmd(&httpd)
         .arg("-k")
         .arg("restart")
         .output()
@@ -125,7 +125,7 @@ fn start_apache_platform(xampp_path: &str) -> Result<()> {
 #[cfg(target_os = "windows")]
 fn start_apache_platform(xampp_path: &str) -> Result<()> {
     let httpd = format!("{}\\apache\\bin\\httpd.exe", xampp_path);
-    let output = std::process::Command::new(&httpd)
+    let output = localdomain_shared::silent_cmd(&httpd)
         .arg("-k")
         .arg("start")
         .output()
@@ -177,7 +177,7 @@ fn stop_apache_platform(xampp_path: &str) -> Result<()> {
 #[cfg(target_os = "windows")]
 fn stop_apache_platform(xampp_path: &str) -> Result<()> {
     let httpd = format!("{}\\apache\\bin\\httpd.exe", xampp_path);
-    let output = std::process::Command::new(&httpd)
+    let output = localdomain_shared::silent_cmd(&httpd)
         .arg("-k")
         .arg("stop")
         .output()
@@ -211,7 +211,7 @@ fn is_apache_running_platform(xampp_path: &str) -> bool {
 
 #[cfg(target_os = "windows")]
 fn is_apache_running_platform(_xampp_path: &str) -> bool {
-    std::process::Command::new("tasklist")
+    localdomain_shared::silent_cmd("tasklist")
         .args(["/FI", "IMAGENAME eq httpd.exe"])
         .output()
         .map(|o| {

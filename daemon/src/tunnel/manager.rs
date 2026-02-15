@@ -28,7 +28,7 @@ fn is_process_alive(pid: u32) -> bool {
 
 #[cfg(windows)]
 fn is_process_alive(pid: u32) -> bool {
-    std::process::Command::new("tasklist")
+    localdomain_shared::silent_cmd("tasklist")
         .args(["/FI", &format!("PID eq {}", pid), "/NH"])
         .output()
         .map(|o| {
@@ -47,7 +47,7 @@ fn kill_process(pid: u32) {
 
 #[cfg(windows)]
 fn kill_process(pid: u32) {
-    let _ = std::process::Command::new("taskkill")
+    let _ = localdomain_shared::silent_cmd("taskkill")
         .args(["/PID", &pid.to_string(), "/F"])
         .output();
 }

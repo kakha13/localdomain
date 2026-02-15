@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
-use std::process::{Command, Stdio};
+use localdomain_shared::silent_cmd;
+use std::process::Stdio;
 use tracing::info;
 
 use crate::paths;
@@ -28,7 +29,7 @@ pub fn start_quick_tunnel(domain: &str, local_port: u16) -> Result<(String, u32)
     // as a belt-and-suspenders override.
     let origin_url = format!("http://{}:{}", domain, local_port);
 
-    let child = Command::new(paths::CLOUDFLARED_BINARY)
+    let child = silent_cmd(paths::CLOUDFLARED_BINARY)
         .args([
             "tunnel",
             "--url",
@@ -86,7 +87,7 @@ pub fn start_quick_tunnel(domain: &str, local_port: u16) -> Result<(String, u32)
             }
             #[cfg(windows)]
             {
-                let _ = Command::new("taskkill")
+                let _ = silent_cmd("taskkill")
                     .args(["/PID", &pid.to_string(), "/F"])
                     .output();
             }
@@ -147,7 +148,7 @@ pub fn start_named_tunnel(
             .context("Failed to write tunnel config")?;
 
         info!("Using config-file mode for tunnel {} ({})", domain, tunnel_uuid);
-        Command::new(paths::CLOUDFLARED_BINARY)
+        silent_cmd(paths::CLOUDFLARED_BINARY)
             .args(["tunnel", "--config", &config_path, "run", tunnel_uuid])
             .stdout(Stdio::null())
             .stderr(Stdio::from(log_file.try_clone()?))
@@ -155,7 +156,7 @@ pub fn start_named_tunnel(
             .context("Failed to start cloudflared named tunnel (config mode)")?
     } else {
         // Token mode: remotely managed (ingress configured in dashboard)
-        Command::new(paths::CLOUDFLARED_BINARY)
+        silent_cmd(paths::CLOUDFLARED_BINARY)
             .args(["tunnel", "run", "--token", token])
             .stdout(Stdio::null())
             .stderr(Stdio::from(log_file.try_clone()?))

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use std::process::Command;
+use localdomain_shared::silent_cmd;
 use tracing::{info, warn};
 
 use super::ca;
@@ -12,7 +12,7 @@ pub fn install_ca_trust() -> Result<()> {
         anyhow::bail!("CA certificate does not exist. Generate it first.");
     }
 
-    let output = Command::new("security")
+    let output = silent_cmd("security")
         .args([
             "add-trusted-cert",
             "-d",
@@ -42,7 +42,7 @@ pub fn install_ca_trust() -> Result<()> {
 
 #[cfg(target_os = "macos")]
 pub fn remove_ca_trust() -> Result<()> {
-    let output = Command::new("security")
+    let output = silent_cmd("security")
         .args(["remove-trusted-cert", "-d", ca::ca_cert_path()])
         .output()
         .context("Failed to run security command")?;
@@ -61,7 +61,7 @@ pub fn remove_ca_trust() -> Result<()> {
 #[cfg(target_os = "macos")]
 pub fn verify_ca_trust() -> bool {
     // Check admin-level trust settings (daemon installs there)
-    if let Ok(output) = Command::new("security")
+    if let Ok(output) = silent_cmd("security")
         .args(["dump-trust-settings", "-d"])
         .output()
     {
@@ -71,7 +71,7 @@ pub fn verify_ca_trust() -> bool {
         }
     }
     // Also check user-level trust settings
-    if let Ok(output) = Command::new("security")
+    if let Ok(output) = silent_cmd("security")
         .args(["dump-trust-settings"])
         .output()
     {
@@ -95,7 +95,7 @@ pub fn install_ca_trust() -> Result<()> {
     std::fs::copy(ca::ca_cert_path(), dest)
         .context("Failed to copy CA cert to /usr/local/share/ca-certificates/")?;
 
-    let output = Command::new("update-ca-certificates")
+    let output = silent_cmd("update-ca-certificates")
         .output()
         .context("Failed to run update-ca-certificates")?;
 
@@ -115,7 +115,7 @@ pub fn remove_ca_trust() -> Result<()> {
     if std::path::Path::new(dest).exists() {
         std::fs::remove_file(dest).context("Failed to remove CA cert")?;
 
-        let output = Command::new("update-ca-certificates")
+        let output = silent_cmd("update-ca-certificates")
             .arg("--fresh")
             .output()
             .context("Failed to run update-ca-certificates")?;
@@ -143,7 +143,7 @@ pub fn install_ca_trust() -> Result<()> {
         anyhow::bail!("CA certificate does not exist. Generate it first.");
     }
 
-    let output = Command::new("certutil")
+    let output = silent_cmd("certutil")
         .args(["-addstore", "Root", ca::ca_cert_path()])
         .output()
         .context("Failed to run certutil")?;
@@ -160,7 +160,7 @@ pub fn install_ca_trust() -> Result<()> {
 
 #[cfg(target_os = "windows")]
 pub fn remove_ca_trust() -> Result<()> {
-    let output = Command::new("certutil")
+    let output = silent_cmd("certutil")
         .args(["-delstore", "Root", "LocalDomain Root CA"])
         .output()
         .context("Failed to run certutil")?;
@@ -178,7 +178,7 @@ pub fn remove_ca_trust() -> Result<()> {
 
 #[cfg(target_os = "windows")]
 pub fn verify_ca_trust() -> bool {
-    if let Ok(output) = Command::new("certutil")
+    if let Ok(output) = silent_cmd("certutil")
         .args(["-verifystore", "Root", "LocalDomain Root CA"])
         .output()
     {

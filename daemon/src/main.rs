@@ -21,7 +21,7 @@ fn verify_privileged() {
 #[cfg(windows)]
 fn verify_privileged() {
     // Quick check: `net session` fails if not running as Administrator
-    let is_admin = std::process::Command::new("net")
+    let is_admin = localdomain_shared::silent_cmd("net")
         .args(["session"])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

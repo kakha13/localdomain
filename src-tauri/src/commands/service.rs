@@ -77,7 +77,7 @@ fn is_apache_running(xampp_path: &str) -> bool {
 
 #[cfg(target_os = "windows")]
 fn is_apache_running(_xampp_path: &str) -> bool {
-    std::process::Command::new("tasklist")
+    localdomain_shared::silent_cmd("tasklist")
         .args(["/FI", "IMAGENAME eq httpd.exe"])
         .output()
         .map(|o| {
@@ -506,7 +506,7 @@ try {{
 
     // Run elevated via Start-Process -Verb RunAs with exit code propagation
     let script_path_str = script_path.display().to_string().replace('\'', "''");
-    let output = std::process::Command::new("powershell")
+    let output = localdomain_shared::silent_cmd("powershell")
         .args([
             "-NoProfile",
             "-ExecutionPolicy", "Bypass",
@@ -568,7 +568,7 @@ Remove-Item -Path 'C:\ProgramData\LocalDomain\bin\localdomain-daemon.exe' -Force
     std::fs::write(&script_path, ps_script)?;
 
     let script_path_str = script_path.display().to_string().replace('\'', "''");
-    let output = std::process::Command::new("powershell")
+    let output = localdomain_shared::silent_cmd("powershell")
         .args([
             "-NoProfile",
             "-ExecutionPolicy", "Bypass",

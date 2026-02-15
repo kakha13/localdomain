@@ -413,7 +413,7 @@ pub fn restart_apache(xampp_path: &str) -> Result<(), AppError> {
         r#"& '{}\\apache\\bin\\httpd.exe' -k restart"#,
         xampp_path.replace('\'', "''")
     );
-    let output = std::process::Command::new("powershell")
+    let output = localdomain_shared::silent_cmd("powershell")
         .args([
             "-NoProfile",
             "-ExecutionPolicy",

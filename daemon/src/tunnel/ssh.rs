@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
-use std::process::{Command, Stdio};
+use localdomain_shared::silent_cmd;
+use std::process::Stdio;
 use tracing::info;
 
 /// Start an SSH reverse tunnel.
@@ -13,7 +14,7 @@ pub fn start_ssh_tunnel(
     key: &str,
     remote_port: u16,
 ) -> Result<(String, u32)> {
-    let mut cmd = Command::new("ssh");
+    let mut cmd = silent_cmd("ssh");
     cmd.args([
         "-N",
         "-o",

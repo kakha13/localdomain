@@ -6,7 +6,7 @@ use tracing::info;
 use crate::paths;
 
 fn get_cloudflared_version() -> Option<String> {
-    std::process::Command::new(paths::CLOUDFLARED_BINARY)
+    localdomain_shared::silent_cmd(paths::CLOUDFLARED_BINARY)
         .arg("--version")
         .output()
         .ok()
@@ -94,7 +94,7 @@ fn download_cloudflared() -> Result<()> {
         std::fs::create_dir_all(parent).ok();
     }
 
-    let status = std::process::Command::new("powershell")
+    let status = localdomain_shared::silent_cmd("powershell")
         .args([
             "-NoProfile",
             "-Command",

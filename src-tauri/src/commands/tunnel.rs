@@ -5,9 +5,9 @@ use localdomain_shared::protocol::{
     EnsureCloudflaredResult, ListTunnelsResult, StartTunnelParams, StartTunnelResult, TunnelType,
     TunnelStatusResult,
 };
+use localdomain_shared::silent_cmd;
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use std::process::Command;
 
 #[derive(Debug, Deserialize)]
 pub struct StartTunnelRequest {
@@ -216,7 +216,7 @@ pub async fn cloudflare_login(state: State<'_, AppState>) -> Result<CloudflareLo
 
     let path = cloudflared_path.clone();
     let output = tokio::task::spawn_blocking(move || {
-        Command::new(&path)
+        silent_cmd(&path)
             .args(["tunnel", "login"])
             .output()
     })
@@ -250,7 +250,7 @@ fn extract_tunnel_id(stdout: &str, tunnel_name: &str, cloudflared_path: &str) ->
     }
 
     // Fallback: list tunnels as JSON
-    let output = Command::new(cloudflared_path)
+    let output = silent_cmd(cloudflared_path)
         .args(["tunnel", "list", "-o", "json"])
         .output()
         .map_err(|e| AppError::Other(format!("Failed to list tunnels: {}", e)))?;
@@ -301,11 +301,11 @@ pub async fn cloudflare_setup_tunnel(
     // Step 1: Create tunnel (or reuse existing)
     let (tunnel_id, cf_path) = tokio::task::spawn_blocking(move || {
         // First try: clean up any stale connector state
-        let _ = Command::new(&cf_path)
+        let _ = silent_cmd(&cf_path)
             .args(["tunnel", "cleanup", &tn])
             .output();
 
-        let output = Command::new(&cf_path)
+        let output = silent_cmd(&cf_path)
             .args(["tunnel", "create", &tn])
             .output()
             .map_err(|e| AppError::Other(format!("Failed to create tunnel: {}", e)))?;
@@ -333,7 +333,7 @@ pub async fn cloudflare_setup_tunnel(
     let tid = tunnel_id.clone();
     let hn = hostname.clone();
     tokio::task::spawn_blocking(move || {
-        let output = Command::new(&cf_path2)
+        let output = silent_cmd(&cf_path2)
             .args(["tunnel", "route", "dns", &tid, &hn])
             .output()
             .map_err(|e| AppError::Other(format!("Failed to route DNS: {}", e)))?;
@@ -354,7 +354,7 @@ pub async fn cloudflare_setup_tunnel(
     let cf_path3 = cf_path.clone();
     let tn2 = tunnel_name.clone();
     let token = tokio::task::spawn_blocking(move || {
-        let output = Command::new(&cf_path3)
+        let output = silent_cmd(&cf_path3)
             .args(["tunnel", "token", &tn2])
             .output()
             .map_err(|e| AppError::Other(format!("Failed to get tunnel token: {}", e)))?;

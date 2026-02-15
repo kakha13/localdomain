@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
+use localdomain_shared::silent_cmd;
 use std::fs;
-use std::process::Command;
 use tracing::info;
 
 use crate::paths;
@@ -12,7 +12,7 @@ fn is_process_alive(pid: i32) -> bool {
 
 #[cfg(windows)]
 fn is_process_alive(pid: i32) -> bool {
-    Command::new("tasklist")
+    silent_cmd("tasklist")
         .args(["/FI", &format!("PID eq {}", pid), "/NH"])
         .output()
         .map(|o| {
@@ -52,7 +52,7 @@ pub fn start_caddy() -> Result<()> {
         );
     }
 
-    let child = Command::new(paths::CADDY_BINARY)
+    let child = silent_cmd(paths::CADDY_BINARY)
         .args(["run", "--config", paths::CADDYFILE])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -73,7 +73,7 @@ fn kill_process(pid: i32) {
 
 #[cfg(windows)]
 fn kill_process(pid: i32) {
-    match Command::new("taskkill")
+    match silent_cmd("taskkill")
         .args(["/PID", &pid.to_string(), "/F"])
         .output()
     {
