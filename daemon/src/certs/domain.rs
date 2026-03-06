@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use localdomain_shared::protocol::GenerateCertResult;
 use rcgen::{
     CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair,
@@ -13,6 +13,18 @@ use super::ca;
 use crate::paths;
 
 pub fn generate_domain_cert(domain: &str) -> Result<GenerateCertResult> {
+    // Validate domain name to prevent path traversal in cert file paths
+    if domain.is_empty()
+        || domain.contains('/')
+        || domain.contains('\\')
+        || domain.contains('\0')
+        || domain == "."
+        || domain == ".."
+        || domain.contains("..")
+    {
+        bail!("Invalid domain name for certificate generation: '{}'", domain);
+    }
+
     // Ensure CA exists
     if !ca::ca_exists() {
         ca::generate_ca()?;

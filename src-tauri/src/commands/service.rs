@@ -16,9 +16,14 @@ pub struct ServiceStatus {
 
 #[tauri::command]
 pub fn get_service_status(state: State<AppState>) -> Result<ServiceStatus, AppError> {
-    let client = state.daemon_client.lock().unwrap();
+    // Acquire daemon_client first, get status, then release before acquiring db lock
+    // in check_xampp_running to avoid potential deadlock
+    let daemon_status = {
+        let client = state.daemon_client.lock().unwrap();
+        client.status()
+    };
     let xampp_running = check_xampp_running(state.inner());
-    match client.status() {
+    match daemon_status {
         Ok(status) => Ok(ServiceStatus {
             daemon_running: status.daemon_running,
             caddy_running: status.caddy_running,
@@ -238,17 +243,22 @@ pub async fn install_daemon() -> Result<(), AppError> {
     let daemon_binary = find_daemon_binary()?;
     let plist_src = find_plist()?;
 
-    let daemon_path = daemon_binary.display().to_string().replace('\'', "'\\''");
-    let plist_path = plist_src.display().to_string().replace('\'', "'\\''");
+    // Escape paths for use inside the double-quoted `do shell script` context.
+    // Within osascript's `do shell script "..."`, the inner string is interpreted
+    // as a shell command, so we need to escape for both AppleScript and shell.
+    let daemon_path = daemon_binary.display().to_string()
+        .replace('\\', "\\\\").replace('"', "\\\"").replace('$', "\\$").replace('`', "\\`");
+    let plist_path = plist_src.display().to_string()
+        .replace('\\', "\\\\").replace('"', "\\\"").replace('$', "\\$").replace('`', "\\`");
 
     let install_script = format!(
         r#"do shell script "
 mkdir -p /usr/local/bin && \
-cp '{daemon_path}' /usr/local/bin/localdomain-daemon && \
+cp \"{daemon_path}\" /usr/local/bin/localdomain-daemon && \
 chmod 755 /usr/local/bin/localdomain-daemon && \
 mkdir -p /var/lib/localdomain/certs && \
 mkdir -p /var/lib/localdomain/caddy && \
-cp '{plist_path}' /Library/LaunchDaemons/com.localdomain.daemon.plist && \
+cp \"{plist_path}\" /Library/LaunchDaemons/com.localdomain.daemon.plist && \
 launchctl bootout system/com.localdomain.daemon 2>/dev/null; \
 launchctl bootstrap system /Library/LaunchDaemons/com.localdomain.daemon.plist
 " with administrator privileges"#

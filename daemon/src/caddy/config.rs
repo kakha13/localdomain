@@ -1,8 +1,24 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use localdomain_shared::domain::CaddyDomainConfig;
 use std::fs;
 use std::io::Write;
 use tracing::info;
+
+/// Validate a Caddy domain config to prevent Caddyfile injection.
+fn validate_caddy_config(domain: &CaddyDomainConfig) -> Result<()> {
+    for (field_name, value) in [("name", &domain.name), ("target_host", &domain.target_host)] {
+        if value.contains('}') || value.contains('{') || value.contains('\n') || value.contains('\r') || value.contains('\0') {
+            bail!("Caddy config {} contains invalid characters: '{}'", field_name, value);
+        }
+        if value.contains(' ') || value.contains('\t') {
+            bail!("Caddy config {} contains whitespace", field_name);
+        }
+        if value.is_empty() {
+            bail!("Caddy config {} cannot be empty", field_name);
+        }
+    }
+    Ok(())
+}
 
 use crate::paths;
 
@@ -11,6 +27,10 @@ pub fn generate_caddyfile(
     http_port: u16,
     https_port: u16,
 ) -> Result<()> {
+    // Validate all domain configs before generating the Caddyfile
+    for domain in domains {
+        validate_caddy_config(domain)?;
+    }
     let content = build_caddyfile(domains, http_port, https_port);
 
     let mut f = fs::File::create(paths::CADDYFILE)?;

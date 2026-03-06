@@ -1,8 +1,26 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use localdomain_shared::domain::HostsEntry;
 use std::fs;
 use std::io::Write;
 use tracing::info;
+
+/// Validate a hosts entry to prevent injection of arbitrary entries.
+fn validate_hosts_entry(entry: &HostsEntry) -> Result<()> {
+    // Reject newlines, tabs, and other control characters that could inject entries
+    for field_name in ["ip", "domain"] {
+        let value = if field_name == "ip" { &entry.ip } else { &entry.domain };
+        if value.contains('\n') || value.contains('\r') || value.contains('\t') || value.contains('\0') {
+            bail!("Hosts entry {} contains invalid characters", field_name);
+        }
+        if value.contains(' ') {
+            bail!("Hosts entry {} contains spaces", field_name);
+        }
+        if value.is_empty() {
+            bail!("Hosts entry {} cannot be empty", field_name);
+        }
+    }
+    Ok(())
+}
 
 use crate::paths;
 
@@ -10,6 +28,11 @@ const SENTINEL_START: &str = "# LocalDomain Start";
 const SENTINEL_END: &str = "# LocalDomain End";
 
 pub fn sync_hosts(entries: &[HostsEntry]) -> Result<()> {
+    // Validate all entries before modifying the hosts file
+    for entry in entries {
+        validate_hosts_entry(entry)?;
+    }
+
     let hosts_path = paths::HOSTS_FILE;
     let current = fs::read_to_string(hosts_path).context("Failed to read hosts file")?;
 

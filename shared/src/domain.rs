@@ -67,8 +67,12 @@ pub fn validate_domain_name(name: &str) -> Result<(), String> {
         return Err("Domain name too long (max 253 characters)".to_string());
     }
 
-    let re = regex_lite::Regex::new(r"^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$")
-        .unwrap();
+    use std::sync::OnceLock;
+    static DOMAIN_RE: OnceLock<regex_lite::Regex> = OnceLock::new();
+    let re = DOMAIN_RE.get_or_init(|| {
+        regex_lite::Regex::new(r"^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$")
+            .expect("domain validation regex is valid")
+    });
 
     if !re.is_match(name) {
         return Err(format!(

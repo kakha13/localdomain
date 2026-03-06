@@ -1,8 +1,40 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use localdomain_shared::domain::XamppVhostConfig;
 use std::fs;
 use std::io::Write;
 use tracing::info;
+
+/// Validate XAMPP vhost config to prevent Apache config injection.
+fn validate_vhost_config(vhost: &XamppVhostConfig) -> Result<()> {
+    for (field_name, value) in [("name", &vhost.name), ("document_root", &vhost.document_root)] {
+        if value.contains('\n') || value.contains('\r') || value.contains('\0') {
+            bail!("XAMPP vhost {} contains invalid characters", field_name);
+        }
+    }
+    // document_root is placed inside quotes, so reject unescaped quotes
+    if vhost.document_root.contains('"') {
+        bail!("XAMPP vhost document_root contains invalid quote character");
+    }
+    // name is placed unquoted in ServerName, reject spaces and special chars
+    if vhost.name.contains(' ') || vhost.name.contains('\t') {
+        bail!("XAMPP vhost name contains whitespace");
+    }
+    Ok(())
+}
+
+/// Validate XAMPP path to prevent path traversal and injection.
+fn validate_xampp_path(xampp_path: &str) -> Result<()> {
+    if xampp_path.is_empty() {
+        bail!("XAMPP path cannot be empty");
+    }
+    if xampp_path.contains('\n') || xampp_path.contains('\r') || xampp_path.contains('\0') {
+        bail!("XAMPP path contains invalid characters");
+    }
+    if !std::path::Path::new(xampp_path).is_absolute() {
+        bail!("XAMPP path must be absolute");
+    }
+    Ok(())
+}
 
 const SENTINEL_START: &str = "# BEGIN LOCALDOMAIN MANAGED VHOSTS";
 const SENTINEL_END: &str = "# END LOCALDOMAIN MANAGED VHOSTS";
@@ -56,6 +88,10 @@ fn parse_listen_port(conf_path: &str) -> Option<u16> {
             continue;
         }
         if let Some(value) = trimmed.strip_prefix("Listen") {
+            // Ensure "Listen" is followed by whitespace (not "ListenBacklog" etc.)
+            if !value.starts_with(' ') && !value.starts_with('\t') {
+                continue;
+            }
             let value = value.trim();
             if value.is_empty() {
                 continue;
@@ -83,6 +119,10 @@ fn parse_listen_port(conf_path: &str) -> Option<u16> {
 /// preserving any user-defined entries outside the managed block.
 /// Uses the detected XAMPP ports for VirtualHost directives.
 pub fn sync_vhosts_config(vhosts: &[XamppVhostConfig], xampp_path: &str) -> Result<()> {
+    validate_xampp_path(xampp_path)?;
+    for vhost in vhosts {
+        validate_vhost_config(vhost)?;
+    }
     let conf_path = vhosts_conf_path(xampp_path);
     let (http_port, ssl_port) = get_xampp_ports(xampp_path);
 
@@ -286,9 +326,11 @@ pub fn ensure_vhosts_include(xampp_path: &str) -> Result<()> {
                 && trimmed.contains("Include")
                 && trimmed.contains("httpd-vhosts.conf")
             {
-                // Remove leading # and optional space
-                let uncommented = trimmed.trim_start_matches('#').trim_start();
-                uncommented.to_string()
+                // Preserve leading whitespace, only remove the '#' and optional space after it
+                let leading = &line[..line.len() - line.trim_start().len()];
+                let after_hash = trimmed.trim_start_matches('#');
+                let uncommented = if after_hash.starts_with(' ') { &after_hash[1..] } else { after_hash };
+                format!("{}{}", leading, uncommented)
             } else {
                 line.to_string()
             }
@@ -334,7 +376,11 @@ pub fn ensure_ssl_module(xampp_path: &str) -> Result<()> {
                 && trimmed.contains("LoadModule")
                 && trimmed.contains("ssl_module")
             {
-                trimmed.trim_start_matches('#').trim_start().to_string()
+                // Preserve leading whitespace, only remove the '#' and optional space after it
+                let leading = &line[..line.len() - line.trim_start().len()];
+                let after_hash = trimmed.trim_start_matches('#');
+                let uncommented = if after_hash.starts_with(' ') { &after_hash[1..] } else { after_hash };
+                format!("{}{}", leading, uncommented)
             } else {
                 line.to_string()
             }

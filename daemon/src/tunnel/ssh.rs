@@ -18,7 +18,7 @@ pub fn start_ssh_tunnel(
     cmd.args([
         "-N",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         "ExitOnForwardFailure=yes",
         "-p",

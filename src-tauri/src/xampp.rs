@@ -4,6 +4,30 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 
+/// Validate that a XAMPP path doesn't contain shell-dangerous characters.
+fn validate_xampp_path(path: &str) -> Result<(), AppError> {
+    if path.is_empty() {
+        return Err(AppError::Validation("XAMPP path cannot be empty".to_string()));
+    }
+    // Reject characters that could enable shell injection
+    for c in ['`', '$', '(', ')', ';', '&', '|', '\n', '\r', '\'', '"', '\\'] {
+        if path.contains(c) {
+            return Err(AppError::Validation(format!(
+                "XAMPP path contains invalid character: '{}'", c
+            )));
+        }
+    }
+    if !std::path::Path::new(path).is_absolute() {
+        return Err(AppError::Validation("XAMPP path must be absolute".to_string()));
+    }
+    Ok(())
+}
+
+/// Escape a string for use inside a double-quoted shell context.
+fn shell_escape(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 const SENTINEL_START: &str = "# BEGIN LOCALDOMAIN MANAGED VHOSTS";
 const SENTINEL_END: &str = "# END LOCALDOMAIN MANAGED VHOSTS";
 
@@ -75,6 +99,10 @@ fn parse_listen_port(conf_path: &str) -> Option<u16> {
             continue;
         }
         if let Some(value) = trimmed.strip_prefix("Listen") {
+            // Ensure "Listen" is followed by whitespace (not "ListenBacklog" etc.)
+            if !value.starts_with(' ') && !value.starts_with('\t') {
+                continue;
+            }
             let value = value.trim();
             if value.is_empty() {
                 continue;
@@ -176,7 +204,11 @@ pub fn ensure_vhosts_include(xampp_path: &str) -> Result<(), AppError> {
                 && trimmed.contains("Include")
                 && trimmed.contains("httpd-vhosts.conf")
             {
-                trimmed.trim_start_matches('#').trim_start().to_string()
+                // Preserve leading whitespace, only remove the '#' and optional space after it
+                let leading = &line[..line.len() - line.trim_start().len()];
+                let after_hash = trimmed.trim_start_matches('#');
+                let uncommented = if after_hash.starts_with(' ') { &after_hash[1..] } else { after_hash };
+                format!("{}{}", leading, uncommented)
             } else {
                 line.to_string()
             }
@@ -221,7 +253,11 @@ pub fn ensure_ssl_module(xampp_path: &str) -> Result<(), AppError> {
                 && trimmed.contains("LoadModule")
                 && trimmed.contains("ssl_module")
             {
-                trimmed.trim_start_matches('#').trim_start().to_string()
+                // Preserve leading whitespace, only remove the '#' and optional space after it
+                let leading = &line[..line.len() - line.trim_start().len()];
+                let after_hash = trimmed.trim_start_matches('#');
+                let uncommented = if after_hash.starts_with(' ') { &after_hash[1..] } else { after_hash };
+                format!("{}{}", leading, uncommented)
             } else {
                 line.to_string()
             }
@@ -362,12 +398,13 @@ fn build_https_vhost(vhost: &XamppVhostConfig, ssl_port: u16) -> String {
 /// Uses stop + kill + start to handle stuck processes reliably.
 #[cfg(target_os = "macos")]
 pub fn restart_apache(xampp_path: &str) -> Result<(), AppError> {
-    let escaped = xampp_path.replace('"', "\\\"");
+    validate_xampp_path(xampp_path)?;
+    let escaped = shell_escape(xampp_path);
     // Stop Apache, kill any remaining XAMPP httpd processes, then start fresh.
     // apachectl stop may fail if already stopped — that's fine.
     // killall ensures no zombie processes hold the port.
     let script = format!(
-        r#"do shell script "{path}/bin/apachectl stop; sleep 1; killall -9 {path}/bin/httpd 2>/dev/null; sleep 1; {path}/bin/apachectl start" with administrator privileges"#,
+        "do shell script \"{path}/bin/apachectl stop; sleep 1; killall -9 {path}/bin/httpd 2>/dev/null; sleep 1; {path}/bin/apachectl start\" with administrator privileges",
         path = escaped
     );
     let output = std::process::Command::new("osascript")
@@ -388,9 +425,11 @@ pub fn restart_apache(xampp_path: &str) -> Result<(), AppError> {
 
 #[cfg(target_os = "linux")]
 pub fn restart_apache(xampp_path: &str) -> Result<(), AppError> {
+    validate_xampp_path(xampp_path)?;
+    let escaped = shell_escape(xampp_path);
     let cmd = format!(
         "{path}/bin/apachectl stop; sleep 1; killall -9 {path}/bin/httpd 2>/dev/null; sleep 1; {path}/bin/apachectl start",
-        path = xampp_path
+        path = escaped
     );
     let output = std::process::Command::new("pkexec")
         .args(["bash", "-c", &cmd])

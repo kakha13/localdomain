@@ -59,21 +59,27 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     }
 
     if version < 3 {
+        // Wrap multi-statement migration in a transaction to prevent partial state
         conn.execute_batch(
             "
+            BEGIN;
             ALTER TABLE domains ADD COLUMN tunnel_subdomain TEXT NOT NULL DEFAULT '';
             ALTER TABLE domains ADD COLUMN tunnel_domain TEXT NOT NULL DEFAULT '';
             INSERT OR REPLACE INTO schema_version (version) VALUES (3);
+            COMMIT;
             ",
         )?;
     }
 
     if version < 4 {
+        // Wrap multi-statement migration in a transaction to prevent partial state
         conn.execute_batch(
             "
+            BEGIN;
             ALTER TABLE domains ADD COLUMN domain_type TEXT NOT NULL DEFAULT 'proxy';
             ALTER TABLE domains ADD COLUMN document_root TEXT NOT NULL DEFAULT '';
             INSERT OR REPLACE INTO schema_version (version) VALUES (4);
+            COMMIT;
             ",
         )?;
     }

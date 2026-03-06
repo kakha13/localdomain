@@ -215,6 +215,11 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn delete_setting(conn: &Connection, key: &str) -> Result<()> {
+    conn.execute("DELETE FROM settings WHERE key = ?1", params![key])?;
+    Ok(())
+}
+
 pub fn clear_audit_log(conn: &Connection) -> Result<()> {
     conn.execute("DELETE FROM audit_log", [])?;
     Ok(())

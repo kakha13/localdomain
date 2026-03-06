@@ -33,7 +33,9 @@ fn is_process_alive(pid: u32) -> bool {
         .output()
         .map(|o| {
             let stdout = String::from_utf8_lossy(&o.stdout);
-            stdout.contains(&pid.to_string())
+            let pid_str = pid.to_string();
+            // Match PID as a whole word to avoid false positives (e.g., PID 123 matching 1234)
+            stdout.split_whitespace().any(|word| word == pid_str)
         })
         .unwrap_or(false)
 }

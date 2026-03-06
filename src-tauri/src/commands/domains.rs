@@ -102,7 +102,7 @@ pub fn sync_state_to_daemon(state: &AppState) -> Result<(), AppError> {
     let mut caddy_configs: Vec<CaddyDomainConfig> = Vec::new();
     for d in &proxy_domains {
         // Skip domains without a target port (hosts-only domains)
-        if d.target_port <= 0 {
+        if d.target_port <= 0 || d.target_port > u16::MAX as i32 {
             continue;
         }
 
@@ -298,20 +298,24 @@ pub async fn delete_domain(app: AppHandle, id: String) -> Result<(), AppError> {
     let app_handle = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
+        // Fetch name before deletion, then release db lock before acquiring daemon_client
+        // to avoid deadlock (consistent lock ordering: db first, then daemon_client)
+        let name = {
+            let conn = state.db.lock().unwrap();
+            let domain = models::get_domain(&conn, &id)?;
+            domain.as_ref().map(|d| d.name.clone())
+        };
+
+        // Stop any running tunnel for this domain (daemon_client lock only)
+        if let Some(ref domain_name) = name {
+            let client = state.daemon_client.lock().unwrap();
+            if client.is_daemon_running() {
+                client.stop_tunnel(domain_name).ok();
+            }
+        }
+
         {
             let conn = state.db.lock().unwrap();
-            // Fetch name before deletion for audit log and tunnel cleanup
-            let domain = models::get_domain(&conn, &id)?;
-            let name = domain.as_ref().map(|d| d.name.clone());
-
-            // Stop any running tunnel for this domain
-            if let Some(ref domain_name) = name {
-                let client = state.daemon_client.lock().unwrap();
-                if client.is_daemon_running() {
-                    client.stop_tunnel(domain_name).ok();
-                }
-            }
-
             let deleted = models::delete_domain(&conn, &id)?;
             if !deleted {
                 return Err(AppError::Validation("Domain not found".to_string()));

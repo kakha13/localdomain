@@ -1,9 +1,13 @@
 use anyhow::{Context, Result};
 use localdomain_shared::silent_cmd;
 use std::fs;
+use std::sync::Mutex;
 use tracing::info;
 
 use crate::paths;
+
+/// Mutex to prevent concurrent start/stop of Caddy (race condition guard)
+static CADDY_LOCK: Mutex<()> = Mutex::new(());
 
 #[cfg(unix)]
 fn is_process_alive(pid: i32) -> bool {
@@ -17,7 +21,9 @@ fn is_process_alive(pid: i32) -> bool {
         .output()
         .map(|o| {
             let stdout = String::from_utf8_lossy(&o.stdout);
-            stdout.contains(&pid.to_string())
+            let pid_str = pid.to_string();
+            // Match PID as a whole word to avoid false positives (e.g., PID 123 matching 1234)
+            stdout.split_whitespace().any(|word| word == pid_str)
         })
         .unwrap_or(false)
 }
@@ -32,6 +38,7 @@ pub fn is_caddy_running() -> bool {
 }
 
 pub fn start_caddy() -> Result<()> {
+    let _lock = CADDY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     if is_caddy_running() {
         info!("Caddy already running");
         return Ok(());
@@ -59,8 +66,12 @@ pub fn start_caddy() -> Result<()> {
         .spawn()
         .context("Failed to start Caddy")?;
 
-    fs::write(paths::CADDY_PID, child.id().to_string())?;
-    info!("Caddy started with PID {}", child.id());
+    let pid = child.id();
+    fs::write(paths::CADDY_PID, pid.to_string())?;
+    // Intentionally leak the Child handle to prevent zombie process on Unix.
+    // We track the PID via the PID file and manage the process lifecycle explicitly.
+    std::mem::forget(child);
+    info!("Caddy started with PID {}", pid);
     Ok(())
 }
 
@@ -68,6 +79,13 @@ pub fn start_caddy() -> Result<()> {
 fn kill_process(pid: i32) {
     unsafe {
         libc::kill(pid, libc::SIGTERM);
+    }
+}
+
+#[cfg(unix)]
+fn force_kill_process(pid: i32) {
+    unsafe {
+        libc::kill(pid, libc::SIGKILL);
     }
 }
 
@@ -91,7 +109,14 @@ fn kill_process(pid: i32) {
     }
 }
 
+#[cfg(windows)]
+fn force_kill_process(pid: i32) {
+    // On Windows, taskkill /F already does a force kill
+    kill_process(pid);
+}
+
 pub fn stop_caddy() -> Result<()> {
+    let _lock = CADDY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     if let Ok(pid_str) = fs::read_to_string(paths::CADDY_PID) {
         if let Ok(pid) = pid_str.trim().parse::<i32>() {
             kill_process(pid);
@@ -101,6 +126,12 @@ pub fn stop_caddy() -> Result<()> {
                 if !is_process_alive(pid) {
                     break;
                 }
+            }
+            // If still alive after SIGTERM, force kill
+            if is_process_alive(pid) {
+                force_kill_process(pid);
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                tracing::warn!("Had to force-kill Caddy (PID {})", pid);
             }
             info!("Stopped Caddy (PID {})", pid);
         }

@@ -76,20 +76,25 @@ pub fn save_settings(state: State<AppState>, settings: AppSettings) -> Result<()
     models::set_setting(&conn, "start_on_boot", &settings.start_on_boot.to_string())?;
     models::set_setting(&conn, "http_port", &settings.http_port.to_string())?;
     models::set_setting(&conn, "https_port", &settings.https_port.to_string())?;
-    if let Some(ref token) = settings.cloudflare_tunnel_token {
-        models::set_setting(&conn, "cloudflare_tunnel_token", token)?;
+    match settings.cloudflare_tunnel_token {
+        Some(ref token) => models::set_setting(&conn, "cloudflare_tunnel_token", token)?,
+        None => models::delete_setting(&conn, "cloudflare_tunnel_token")?,
     }
-    if let Some(ref host) = settings.default_ssh_host {
-        models::set_setting(&conn, "default_ssh_host", host)?;
+    match settings.default_ssh_host {
+        Some(ref host) => models::set_setting(&conn, "default_ssh_host", host)?,
+        None => models::delete_setting(&conn, "default_ssh_host")?,
     }
-    if let Some(ref user) = settings.default_ssh_user {
-        models::set_setting(&conn, "default_ssh_user", user)?;
+    match settings.default_ssh_user {
+        Some(ref user) => models::set_setting(&conn, "default_ssh_user", user)?,
+        None => models::delete_setting(&conn, "default_ssh_user")?,
     }
-    if let Some(ref key_path) = settings.default_ssh_key_path {
-        models::set_setting(&conn, "default_ssh_key_path", key_path)?;
+    match settings.default_ssh_key_path {
+        Some(ref key_path) => models::set_setting(&conn, "default_ssh_key_path", key_path)?,
+        None => models::delete_setting(&conn, "default_ssh_key_path")?,
     }
-    if let Some(ref path) = settings.xampp_path {
-        models::set_setting(&conn, "xampp_path", path)?;
+    match settings.xampp_path {
+        Some(ref path) => models::set_setting(&conn, "xampp_path", path)?,
+        None => models::delete_setting(&conn, "xampp_path")?,
     }
     Ok(())
 }
@@ -190,14 +195,19 @@ pub fn import_xampp_vhosts(
         }
     };
 
-    for vhost in &vhosts {
+    // Fetch existing domains once to avoid O(n*m) per-vhost lookup
+    let existing_names: std::collections::HashSet<String> = {
         let conn = state.db.lock().unwrap();
+        models::list_domains(&conn)?.iter().map(|d| d.name.clone()).collect()
+    };
+
+    for vhost in &vhosts {
         // Skip if domain already exists
-        let existing = models::list_domains(&conn)?;
-        if existing.iter().any(|d| d.name == vhost.server_name) {
+        if existing_names.contains(&vhost.server_name) {
             continue;
         }
 
+        let conn = state.db.lock().unwrap();
         let req = CreateDomainRequest {
             name: vhost.server_name.clone(),
             target_host: None,
