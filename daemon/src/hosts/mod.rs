@@ -42,14 +42,24 @@ pub fn sync_hosts(entries: &[HostsEntry]) -> Result<()> {
 
     let new_content = build_hosts_content(&current, entries);
 
-    // Atomic write via temp file
+    // Write new content via temp file + rename (atomic on Unix).
+    // On Windows, rename can fail on the hosts file because the DNS Client service
+    // or security software holds brief locks. Fall back to direct write in that case.
     let tmp_path = format!("{}.localdomain.tmp", hosts_path);
     {
         let mut f = fs::File::create(&tmp_path)?;
         f.write_all(new_content.as_bytes())?;
         f.sync_all()?;
     }
-    fs::rename(&tmp_path, hosts_path).context("Failed to replace hosts file")?;
+    match fs::rename(&tmp_path, hosts_path) {
+        Ok(()) => {}
+        Err(_rename_err) => {
+            // Fallback: write directly to hosts file (backup already saved above)
+            fs::write(hosts_path, new_content.as_bytes())
+                .context("Failed to write hosts file")?;
+            let _ = fs::remove_file(&tmp_path);
+        }
+    }
 
     info!("Updated hosts file with {} entries", entries.len());
     Ok(())

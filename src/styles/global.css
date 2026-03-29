@@ -765,7 +765,7 @@ body {
   animation: cardIn 0.3s ease backwards;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 

@@ -287,10 +287,18 @@ launchctl bootstrap system /Library/LaunchDaemons/com.localdomain.daemon.plist
 #[tauri::command]
 pub async fn uninstall_daemon() -> Result<(), AppError> {
     let uninstall_script = r#"do shell script "
+# Stop Caddy as safety net (daemon's graceful shutdown should handle this)
+pkill -f 'caddy run' 2>/dev/null || true
+# Stop and remove daemon
 launchctl bootout system/com.localdomain.daemon 2>/dev/null; \
 rm -f /Library/LaunchDaemons/com.localdomain.daemon.plist; \
 rm -f /usr/local/bin/localdomain-daemon; \
-rm -f /var/run/localdomain.sock
+rm -f /var/run/localdomain.sock; \
+rm -f /var/lib/localdomain/caddy/caddy.pid; \
+# Remove managed entries from hosts file
+if grep -q '# LocalDomain Start' /etc/hosts 2>/dev/null; then \
+    sed -i '' '/# LocalDomain Start/,/# LocalDomain End/d' /etc/hosts; \
+fi
 " with administrator privileges"#;
 
     let output = std::process::Command::new("osascript")
@@ -405,12 +413,17 @@ systemctl enable --now localdomain-daemon"#,
 #[tauri::command]
 pub async fn uninstall_daemon() -> Result<(), AppError> {
     let uninstall_script = "\
+        pkill -f 'caddy run' 2>/dev/null || true; \
         systemctl stop localdomain-daemon 2>/dev/null; \
         systemctl disable localdomain-daemon 2>/dev/null; \
         rm -f /etc/systemd/system/localdomain-daemon.service && \
         systemctl daemon-reload; \
         rm -f /usr/local/bin/localdomain-daemon; \
-        rm -f /var/run/localdomain.sock";
+        rm -f /var/run/localdomain.sock; \
+        rm -f /var/lib/localdomain/caddy/caddy.pid; \
+        if grep -q '# LocalDomain Start' /etc/hosts 2>/dev/null; then \
+            sed -i '/# LocalDomain Start/,/# LocalDomain End/d' /etc/hosts; \
+        fi";
 
     let output = std::process::Command::new("pkexec")
         .args(["bash", "-c", uninstall_script])
@@ -468,9 +481,19 @@ try {{
     $svc = Get-Service -Name 'localdomain-daemon' -ErrorAction SilentlyContinue
     if ($svc) {{
         Stop-Service -Name 'localdomain-daemon' -Force -ErrorAction SilentlyContinue
+        # Wait for service to fully stop before deletion
+        try {{ $svc.WaitForStatus('Stopped', '00:00:10') }} catch {{}}
         sc.exe delete 'localdomain-daemon' | Out-Null
-        Start-Sleep -Seconds 1
+        # Poll until service is truly gone (deletion is asynchronous on Windows)
+        for ($i = 0; $i -lt 30; $i++) {{
+            $check = Get-Service -Name 'localdomain-daemon' -ErrorAction SilentlyContinue
+            if (-not $check) {{ break }}
+            Start-Sleep -Milliseconds 500
+        }}
     }}
+
+    # Clean stale Caddy PID file (Caddy stopped by daemon's graceful shutdown)
+    Remove-Item -Path 'C:\ProgramData\LocalDomain\caddy\caddy.pid' -Force -ErrorAction SilentlyContinue
 
     sc.exe create 'localdomain-daemon' binPath='{dest}' start=auto DisplayName='LocalDomain Daemon'
     if ($LASTEXITCODE -ne 0) {{ throw "sc.exe create failed with exit code $LASTEXITCODE" }}
@@ -567,8 +590,28 @@ try {{
 #[tauri::command]
 pub async fn uninstall_daemon() -> Result<(), AppError> {
     let ps_script = r#"$ErrorActionPreference = 'Stop'
+
+# Stop Caddy first as safety net (daemon's graceful shutdown should handle this,
+# but if the daemon is stuck or was killed, Caddy may be orphaned)
+Get-Process -Name 'caddy' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
 Stop-Service -Name 'localdomain-daemon' -Force -ErrorAction SilentlyContinue
 sc.exe delete 'localdomain-daemon'
+
+# Clean stale PID file
+Remove-Item -Path 'C:\ProgramData\LocalDomain\caddy\caddy.pid' -Force -ErrorAction SilentlyContinue
+
+# Remove managed entries from the hosts file
+$hostsPath = 'C:\Windows\System32\drivers\etc\hosts'
+if (Test-Path $hostsPath) {
+    $content = Get-Content $hostsPath -Raw -ErrorAction SilentlyContinue
+    if ($content -and $content -match '# LocalDomain Start') {
+        $cleaned = $content -replace '(?s)\r?\n?# LocalDomain Start.*?# LocalDomain End\r?\n?', "`r`n"
+        Set-Content -Path $hostsPath -Value $cleaned.TrimEnd() -NoNewline
+        Add-Content -Path $hostsPath -Value ''
+    }
+}
+
 Remove-Item -Path 'C:\ProgramData\LocalDomain\bin\localdomain-daemon.exe' -Force -ErrorAction SilentlyContinue
 "#;
 

@@ -34,6 +34,28 @@ fn verify_privileged() {
     }
 }
 
+/// Stop managed child processes (Caddy, tunnels) before daemon exits.
+/// Called on SIGTERM (Unix), Ctrl+C (Windows console), or service Stop (Windows Service).
+fn cleanup_before_shutdown() {
+    info!("Daemon shutting down, stopping child processes...");
+    if let Err(e) = caddy::process::stop_caddy() {
+        tracing::warn!("Failed to stop Caddy during shutdown: {}", e);
+    }
+    if let Err(e) = tunnel::manager::stop_all_tunnels() {
+        tracing::warn!("Failed to stop tunnels during shutdown: {}", e);
+    }
+    info!("Shutdown cleanup complete");
+}
+
+/// Clean up stale state from a previous daemon instance.
+fn cleanup_stale_state() {
+    // If Caddy PID file exists but process is dead, remove the stale PID file
+    if std::path::Path::new(paths::CADDY_PID).exists() && !caddy::process::is_caddy_running() {
+        let _ = std::fs::remove_file(paths::CADDY_PID);
+        info!("Removed stale Caddy PID file");
+    }
+}
+
 /// Core daemon logic — shared between direct execution and Windows Service mode.
 /// `as_service`: true when running as a Windows Service (skips privilege check, logs to file).
 async fn run_daemon(as_service: bool) -> anyhow::Result<()> {
@@ -42,10 +64,20 @@ async fn run_daemon(as_service: bool) -> anyhow::Result<()> {
     {
         if as_service {
             std::fs::create_dir_all(paths::LOGS_DIR).ok();
+
+            // Rotate daemon log if over 5MB to prevent unbounded growth
+            let log_path = format!("{}\\daemon.log", paths::LOGS_DIR);
+            if let Ok(meta) = std::fs::metadata(&log_path) {
+                if meta.len() > 5 * 1024 * 1024 {
+                    let old_path = format!("{}\\daemon.log.old", paths::LOGS_DIR);
+                    let _ = std::fs::rename(&log_path, &old_path);
+                }
+            }
+
             if let Ok(log_file) = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(format!("{}\\daemon.log", paths::LOGS_DIR))
+                .open(&log_path)
             {
                 tracing_subscriber::fmt()
                     .with_env_filter(
@@ -102,6 +134,35 @@ async fn run_daemon(as_service: bool) -> anyhow::Result<()> {
     }
 
     info!("localdomain-daemon starting");
+
+    // Clean up stale state from a previous daemon instance
+    cleanup_stale_state();
+
+    // Register signal handlers for graceful shutdown (non-service mode).
+    // Windows Service mode handles shutdown via the service control handler in service_main().
+    #[cfg(unix)]
+    {
+        tokio::spawn(async {
+            let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("Failed to register SIGTERM handler");
+            sigterm.recv().await;
+            info!("Received SIGTERM, shutting down...");
+            cleanup_before_shutdown();
+            std::process::exit(0);
+        });
+    }
+
+    #[cfg(windows)]
+    if !as_service {
+        tokio::spawn(async {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("Failed to register Ctrl+C handler");
+            info!("Received Ctrl+C, shutting down...");
+            cleanup_before_shutdown();
+            std::process::exit(0);
+        });
+    }
 
     server::run_server().await
 }
@@ -234,6 +295,10 @@ fn service_main(_arguments: Vec<std::ffi::OsString>) {
             }
         }
     });
+
+    // Stop child processes (Caddy, tunnels) before reporting stopped.
+    // This prevents orphaned processes when the service is restarted or reinstalled.
+    cleanup_before_shutdown();
 
     let exit_code = if clean_stop { 0 } else { 1 };
 

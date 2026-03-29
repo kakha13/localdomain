@@ -1,7 +1,7 @@
 {
   "name": "localdomain",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "deploy-pages": "cd website && npm run build && npx wrangler pages deploy out",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "build:daemon": "cargo build -p localdomain-daemon --release && node -e \"require('fs').copyFileSync('target/release/localdomain-daemon' + (process.platform==='win32'?'.exe':''), 'resources/localdomain-daemon' + (process.platform==='win32'?'.exe':''))\"",
+    "build:all": "npm run build:daemon && npx tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",
