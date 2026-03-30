@@ -131,7 +131,7 @@ export default function LandingPage() {
           HTTPS that just works, reverse proxy, public tunnels, and a system tray for quick control. All from a clean native app.
         </p>
         <div className="ld-hero-actions ld-animate-in ld-delay-3">
-          <a href="https://sourceforge.net/projects/localdomain/files/v0.1.2/LocalDomain_0.1.2_aarch64.dmg" className="ld-btn ld-btn-mac">
+          <a href="https://sourceforge.net/projects/localdomain/files/v0.1.3/LocalDomain_0.1.3_aarch64.dmg" className="ld-btn ld-btn-mac">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
             </svg>
@@ -145,7 +145,7 @@ export default function LandingPage() {
             </svg>
             Download for Windows
           </a>
-          <a href="https://sourceforge.net/projects/localdomain/files/v0.1.2/LocalDomain_0.1.2_amd64.deb" className="ld-btn ld-btn-linux">
+          <a href="https://sourceforge.net/projects/localdomain/files/v0.1.3/LocalDomain_0.1.3_amd64.deb" className="ld-btn ld-btn-linux">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="4" y1="20" x2="20" y2="20"/>
               <polyline points="7 17 12 12 17 17"/>
