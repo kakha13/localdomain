@@ -188,10 +188,17 @@ export function SettingsView({ status, onStart, onStop, onUninstall, onTrustCa }
               className="btn btn-sm btn-primary"
               onClick={async () => {
                 setTrustingCa(true);
+                setTrustHint(false);
                 await onTrustCa();
                 setTrustingCa(false);
-                setTrustHint(true);
-                setTimeout(() => setTrustHint(false), 8000);
+                // onTrustCa() calls refresh() internally — if ca_trusted
+                // is now true, status prop will update and hide this button.
+                // Show hint only after a short delay to let the re-render
+                // reflect the new status.
+                setTimeout(() => {
+                  setTrustHint(true);
+                  setTimeout(() => setTrustHint(false), 8000);
+                }, 200);
               }}
               disabled={trustingCa}
             >

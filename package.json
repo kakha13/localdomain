@@ -11,7 +11,9 @@
     "deploy-pages": "cd website && npm run build && npx wrangler pages deploy out",
     "lint": "tsc --noEmit",
     "build:daemon": "cargo build -p localdomain-daemon --release && node -e \"require('fs').copyFileSync('target/release/localdomain-daemon' + (process.platform==='win32'?'.exe':''), 'resources/localdomain-daemon' + (process.platform==='win32'?'.exe':''))\"",
-    "build:all": "npm run build:daemon && npx tauri build"
+    "reload:daemon": "cargo build -p localdomain-daemon --release && sudo cp target/release/localdomain-daemon /usr/local/bin/localdomain-daemon && sudo launchctl kickstart -k system/com.localdomain.daemon",
+    "build:all": "npm run build:daemon && npx tauri build",
+    "build:mac": "npm run build:daemon && npx tauri build --bundles dmg"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",

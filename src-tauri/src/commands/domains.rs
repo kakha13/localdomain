@@ -419,7 +419,8 @@ pub fn trust_ca(state: State<AppState>) -> Result<(), AppError> {
         }
     }
 
-    // macOS fallback: use osascript to prompt the user for admin privileges
+    // macOS fallback: use osascript to prompt the user for admin privileges.
+    // The daemon already cleaned up stale certs (cleanup_stale_ca_certs in install_ca_trust).
     #[cfg(target_os = "macos")]
     {
         let ca_cert = "/var/lib/localdomain/certs/localdomain-ca.crt";

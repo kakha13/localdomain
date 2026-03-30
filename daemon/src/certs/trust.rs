@@ -6,11 +6,34 @@ use super::ca;
 
 // ---- macOS: System Keychain ----
 
+/// Remove stale "LocalDomain Root CA" certs from System Keychain.
+/// This handles duplicates from prior CA regenerations.
+#[cfg(target_os = "macos")]
+fn cleanup_stale_ca_certs() {
+    for _ in 0..10 {
+        let output = silent_cmd("security")
+            .args([
+                "delete-certificate",
+                "-c",
+                "LocalDomain Root CA",
+                "/Library/Keychains/System.keychain",
+            ])
+            .output();
+        match output {
+            Ok(o) if o.status.success() => continue,
+            _ => break,
+        }
+    }
+}
+
 #[cfg(target_os = "macos")]
 pub fn install_ca_trust() -> Result<()> {
     if !ca::ca_exists() {
         anyhow::bail!("CA certificate does not exist. Generate it first.");
     }
+
+    // Clean up stale certs before adding
+    cleanup_stale_ca_certs();
 
     let output = silent_cmd("security")
         .args([
@@ -70,7 +93,7 @@ pub fn verify_ca_trust() -> bool {
             return true;
         }
     }
-    // Also check user-level trust settings
+    // Check user-level trust settings (visible when running as the same user)
     if let Ok(output) = silent_cmd("security")
         .args(["dump-trust-settings"])
         .output()
@@ -80,7 +103,58 @@ pub fn verify_ca_trust() -> bool {
             return true;
         }
     }
+    // Fallback for macOS Sequoia+: trust settings may be at user-level (not
+    // visible to the daemon running as root). Check if the current CA cert
+    // is in the System Keychain — its presence means it was added via
+    // `security add-trusted-cert`, so trust was established for the user.
+    ca_cert_in_system_keychain()
+}
+
+/// Check if the current CA cert on disk is present in the System Keychain.
+#[cfg(target_os = "macos")]
+fn ca_cert_in_system_keychain() -> bool {
+    let ca_pem = match std::fs::read_to_string(ca::ca_cert_path()) {
+        Ok(pem) => normalize_pem(&pem),
+        Err(_) => return false,
+    };
+    if ca_pem.is_empty() {
+        return false;
+    }
+
+    // Export all "LocalDomain Root CA" certs from System Keychain as PEM
+    let output = match silent_cmd("security")
+        .args([
+            "find-certificate",
+            "-c",
+            "LocalDomain Root CA",
+            "-a",
+            "-p",
+            "/Library/Keychains/System.keychain",
+        ])
+        .output()
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return false,
+    };
+
+    let keychain_pems = String::from_utf8_lossy(&output.stdout);
+    // Split the concatenated PEM output into individual certs and compare
+    for cert_block in keychain_pems.split("-----END CERTIFICATE-----") {
+        let normalized = normalize_pem(cert_block);
+        if !normalized.is_empty() && normalized == ca_pem {
+            return true;
+        }
+    }
     false
+}
+
+/// Strip PEM headers, whitespace, and newlines to get just the base64 content.
+#[cfg(target_os = "macos")]
+fn normalize_pem(pem: &str) -> String {
+    pem.lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.starts_with("-----") && !l.is_empty())
+        .collect::<String>()
 }
 
 // ---- Linux: update-ca-certificates ----
